@@ -36,9 +36,9 @@ During the initial phase, mongo needs to be run without the authentication optio
 
 We just run the first node of the replicaset while the other are waiting the key file in etcd.
 
--  The `siteUserAdmin` and `siteRootAdmin` are created on the first node.
--  The keyfile is add to etcd
--  All mongodb are started
+-  The `siteUserAdmin` and `siteRootAdmin` are created on the first node with random passwords stored in etcd.
+-  The keyfile is generated and added to etcd.
+-  All mongodb are started.
 
 ### Phase 2
 
