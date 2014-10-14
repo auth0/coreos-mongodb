@@ -1,0 +1,88 @@
+[Unit]
+Description=mongod service
+After=docker.service
+Requires=docker.service
+After=etcd.service
+Requires=etcd.service
+
+[Service]
+KillMode=none
+TimeoutStartSec=360
+TimeoutStopSec=360
+EnvironmentFile=/etc/environment
+Environment=INSTANCE=%i
+ExecStartPre=/bin/bash -c "/usr/bin/docker pull mongo:2.6"
+ExecStartPre=-/bin/bash -c "/usr/bin/docker rm -f mongodb"
+ExecStart=/bin/bash -c "\
+          set -e; \
+          REPLICA_NAME=$(etcdctl get /mongo/replica/name 2>/dev/null || true); \
+          REPLICA_KEY=$(etcdctl get /mongo/replica/key 2>/dev/null || true); \
+          MONGO_ARGS='--smallfiles'; \
+          if [ -n \"$REPLICA_KEY\" ]; \
+          then \
+            MONGO_ARGS=\"--replSet $REPLICA_NAME --keyFile /data/db/replica.key\"; \
+            echo $REPLICA_KEY > /var/mongo/replica.key; \
+            chmod 700 /var/mongo/replica.key; \
+          else \
+            if [ \"$INSTANCE\" -eq \"1\" ]; \
+            then \
+              echo \"starting first node to configure\"; \
+            else \
+              echo \"replica is not ready yet\"; \
+              sleep 60; \
+              exit 1; \
+            fi; \
+          fi; \
+          docker run \
+              --rm \
+              --name mongodb \
+              -v /var/mongo:/data/db \
+              -p 27017:27017 \
+              mongo:2.6 mongod $MONGO_ARGS"
+ExecStartPost=/bin/bash -c "\
+          set -e; \
+          /usr/bin/etcdctl set /mongo/replica/nodes/$COREOS_PRIVATE_IPV4/port 27017; \
+          /usr/bin/etcdctl set /mongo/replica/nodes/$COREOS_PRIVATE_IPV4/status on; \
+          REPLICA_KEY=$(etcdctl get /mongo/replica/key 2>/dev/null || true); \
+          if [ -n \"$REPLICA_KEY\" ]; then exit 0; fi; \
+          if [ \"$INSTANCE\" -ne \"1\" ]; then exit 0; fi; \
+          /usr/bin/sleep 60; \
+          \
+          echo Configuring credentials ; \
+          SITE_USR_ADMIN_PWD=$(etcdctl get /mongo/replica/siteUserAdmin/pwd || \
+                               etcdctl set /mongo/replica/siteUserAdmin/pwd \
+                                          $(openssl rand -base64 32)); \
+          \
+          SITE_ROOT_PWD=$(etcdctl get /mongo/replica/siteRootAdmin/pwd || \
+                          etcdctl set /mongo/replica/siteRootAdmin/pwd \
+                                      $(openssl rand -base64 32)); \
+          \
+          echo Creating the siteUserAdmin user... ; \
+          docker run \
+            -it --rm \
+            mongo:2.6 \
+            mongo $COREOS_PRIVATE_IPV4/admin \
+            --eval \"db.createUser({user:'siteUserAdmin', \
+                                    pwd:'$SITE_USR_ADMIN_PWD', \
+                                    roles: [{role:'userAdminAnyDatabase', db:'admin'}]});\"; \
+          \
+          echo Creating the siteRootAdmin user... ; \
+          docker run \
+            -it --rm \
+            mongo:2.6 \
+            mongo $COREOS_PRIVATE_IPV4/admin \
+            --eval \"db.createUser({user:'siteRootAdmin', \
+                                    pwd:'$SITE_ROOT_PWD', \
+                                    roles: [{role:'root', db:'admin'}]});\"; \
+          \
+          etcdctl set /mongo/replica/key \"$(openssl rand -base64 741)\"; \
+          echo restarting now... ; \
+          exit 1"
+ExecStop=/bin/bash -c -v "\
+          /usr/bin/docker stop -t 60 mongodb || true; \
+          /usr/bin/etcdctl set /mongo/replica/nodes/$COREOS_PRIVATE_IPV4/status off"
+Restart=on-failure
+
+[X-Fleet]
+X-Conflicts=%p@*.service
+Conflicts=%p@*.service
