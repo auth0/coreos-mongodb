@@ -26,7 +26,7 @@ $ Welcome to the MongoDB shell.
 
 ## How it works?
 
-The units in this repository follow the process explained in this [tutorial](http://docs.mongodb.org/manual/tutorial/deploy-replica-set-with-auth/).
+The units follow the process explained in this [tutorial](http://docs.mongodb.org/manual/tutorial/deploy-replica-set-with-auth/).
 
 I've split the process in 3 different phases.
 
