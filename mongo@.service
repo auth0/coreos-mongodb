@@ -21,6 +21,7 @@ ExecStart=/bin/bash -c "\
           if [ -n \"$REPLICA_KEY\" ]; \
           then \
             MONGO_ARGS=\"--replSet $REPLICA_NAME --keyFile /data/db/replica.key\"; \
+            mkdir -p /var/mongo; \
             echo $REPLICA_KEY > /var/mongo/replica.key; \
             chmod 700 /var/mongo/replica.key; \
           else \
