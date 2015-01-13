@@ -60,7 +60,7 @@ ExecStartPost=/bin/bash -c "\
           \
           echo Creating the siteUserAdmin user... ; \
           docker run \
-            -it --rm \
+            -t --rm \
             mongo:2.6 \
             mongo $COREOS_PRIVATE_IPV4/admin \
             --eval \"db.createUser({user:'siteUserAdmin', \
@@ -69,7 +69,7 @@ ExecStartPost=/bin/bash -c "\
           \
           echo Creating the siteRootAdmin user... ; \
           docker run \
-            -it --rm \
+            -t --rm \
             mongo:2.6 \
             mongo $COREOS_PRIVATE_IPV4/admin \
             --eval \"db.createUser({user:'siteRootAdmin', \

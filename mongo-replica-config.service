@@ -28,7 +28,7 @@ ExecStart=/bin/bash -c "\
     echo trying to init the replicaset...; \
     \
     function mongo() { \
-      docker run -it --rm mongo:2.6 \
+      docker run -t --rm mongo:2.6 \
         mongo $COREOS_PRIVATE_IPV4/admin \
         -u siteRootAdmin -p $SITE_ROOT_PWD \
         --eval \"$1\"; \
