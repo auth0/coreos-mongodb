@@ -1,5 +1,4 @@
 Deploy a replicaset to coreos like a boss.
-
 Auto-discover new members via etcd.
 
 ## Deploy
