@@ -7,8 +7,11 @@ Requires=etcd.service
 
 [Service]
 KillMode=none
-TimeoutStartSec=360
+
+# Let processes take awhile to start up
+TimeoutStartSec=0
 TimeoutStopSec=360
+
 EnvironmentFile=/etc/environment
 Environment=INSTANCE=%i
 ExecStartPre=/bin/bash -c "/usr/bin/docker pull mongo:2.6"
