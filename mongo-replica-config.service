@@ -1,6 +1,7 @@
 [Unit]
 Description=ReplicaSet Configurator
 BindsTo=mongo@1.service
+After=mongo@1.service
 
 [Service]
 KillMode=none
