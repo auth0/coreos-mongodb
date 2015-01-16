@@ -42,13 +42,12 @@ ExecStart=/bin/bash -c "\
           echo ==============================; \
           echo setting CID
           echo ==============================; \
-          CID=$(docker run \
+          docker run \
               --rm \
               --name mongodb \
               --volumes-from mongo-data \
               -p 27017:27017 \
-              jaigouk/mongodb-container $MONGO_ARGS); \
-          /usr/bin/etcdctl set /mongo/replica/nodes/$COREOS_PRIVATE_IPV4/cid CID;"
+              jaigouk/mongodb-container $MONGO_ARGS);"
 
 ExecStartPost=/bin/bash -c "\
           set -e; \
@@ -72,15 +71,9 @@ ExecStartPost=/bin/bash -c "\
           echo ==============================; \
           echo Creating the siteUserAdmin user... ; \
           echo ==============================; \
-          docker run -t --rm --volumes-from mongo-data1 --entrypoint=mongo"  \
-          jaigouk/mongodb-container $COREOS_PRIVATE_IPV4/admin  \
-          --eval 'db.createUser({ user:\"siteUserAdmin\", pwd:\"$SITE_USR_ADMIN_PWD\", roles: [{role:\"userAdminAnyDatabase\", db:\"admin\"}, \"readWrite\"]});' \
-          echo ==============================; \
-          echo Creating the siteRootAdmin user... ; \
-          echo ==============================; \
-          docker run -t --rm --volumes-from mongo-data1 --entrypoint=mongo"  \
-          jaigouk/mongodb-container $COREOS_PRIVATE_IPV4/admin  \
-          --eval 'db.createUser({ user:\"siteRootAdmin\", pwd:\"$SITE_ROOT_PWD\", roles: [{role:\"userAdminAnyDatabase\", db:\"admin\"}, \"readWrite\"]});' \
+          docker run -t --rm --name mongodb --volumes-from mongo-data%i --entrypoint=mongo"  \
+            jaigouk/mongodb-container $COREOS_PRIVATE_IPV4/admin  \
+           --eval 'use admin; db.createUser({ user:\"siteUserAdmin\", pwd:\"$SITE_USR_ADMIN_PWD\", roles: [{role:\"userAdminAnyDatabase\", db:\"admin\"}]}); db.createUser({ user:\"siteRootAdmin\", pwd:\"$SITE_ROOT_PWD\", roles: [{role:\"userAdminAnyDatabase\", db:\"admin\"}]});' \
           \
           etcdctl set /mongo/replica/key \"$(openssl rand -base64 741)\"; \
           echo restarting now... ; \
