@@ -4,53 +4,67 @@ BindsTo=mongo@1.service
 
 [Service]
 KillMode=none
-
-# Let processes take awhile to start up
 TimeoutStartSec=0
 TimeoutStopSec=360
-
 EnvironmentFile=/etc/environment
-ExecStartPre=/bin/bash -c "/usr/bin/docker pull jaigouk/mongodb-container"
-ExecStart=/bin/bash -c "set -e; \
-    echo get replica name and root pwd; \
+ExecStartPre=/bin/bash -c "/usr/bin/docker pull mongo:2.6"
+ExecStart=/bin/bash -c "\
+    set -e; \
     REPLICA_NAME=$(etcdctl get /mongo/replica/name 2>/dev/null); \
     OTHER_NODES=$(etcdctl ls /mongo/replica/nodes | \
                     xargs -I{} basename {} | \
                     xargs -I{} echo {}:27017 | \
                     grep -v $COREOS_PRIVATE_IPV4); \
+    \
     SITE_ROOT_PWD=$(etcdctl get /mongo/replica/siteRootAdmin/pwd || true); \
     \
     if [ -z \"$SITE_ROOT_PWD\" ]; \
     then \
       echo siteRootAdmin is not yet configured...; \
-      /usr/bin/sleep 30; \
+      /usr/bin/sleep 60; \
       exit 1; \
+    else \
+      echo db Auth ; \
+      docker run \
+        -t --rm \
+        mongo:2.6 \
+        mongo $COREOS_PRIVATE_IPV4/admin \
+        --eval \"db.auth('siteRootAdmin', '$SITE_ROOT_PWD')\"; \
     fi; \
+    \
     echo trying to init the replicaset...; \
-    docker run -t --rm --name mongodb --volumes-from mongo-data1 --entrypoint='mongo'  \
-      jaigouk/mongodb-container $COREOS_PRIVATE_IPV4/admin -u siteRootAdmin -p $SITE_ROOT_PWD \
-       --eval 'rs.status().startupStatus === 3 && rs.initiate();' \
+    \
+    mongo() { \
+      docker run -t --rm mongo:2.6 \
+        mongo $COREOS_PRIVATE_IPV4/admin \
+        -u siteRootAdmin -p $SITE_ROOT_PWD \
+        --eval \"$1\"; \
+    }; \
+    \
+    mongo \"rs.status().startupStatus === 3 && rs.initiate();\"; \
+    \
     \
     /usr/bin/sleep 60; \
     echo fix address of first node...; \
-    docker run -t --rm --name mongodb --volumes-from mongo-data1 --entrypoint='mongo'  \
-      jaigouk/mongodb-container $COREOS_PRIVATE_IPV4/admin -u siteRootAdmin -p $SITE_ROOT_PWD  \
-       --eval 'var config = rs.config();if (config.members.length === 1) {config.members[0].host = '$COREOS_PRIVATE_IPV4'; rs.reconfig(config);}' ;\
+    mongo \"var config = rs.config(); \
+            if (config.members.length === 1) { \
+              config.members[0].host = '$COREOS_PRIVATE_IPV4'; \
+              rs.reconfig(config); \
+            }\"; \
     \
     echo adding nodes...; \
     \
-    ADD_CMDS=$(etcdctl ls /mongo/replica/nodes | grep -v $COREOS_PRIVATE_IPV4 | xargs -I{} basename {} | xargs -I{} echo \"rs.add('{}:27017');\" ) ;\
+    ADD_CMDS=$(etcdctl ls /mongo/replica/nodes | \
+                 grep -v $COREOS_PRIVATE_IPV4 | \
+                 xargs -I{} basename {} | \
+                 xargs -I{} echo \"rs.add('{}:27017');\"); \
     \
-    docker run -t --rm --name mongodb --volumes-from mongo-data1 --entrypoint='mongo'  \
-      jaigouk/mongodb-container $COREOS_PRIVATE_IPV4/admin -u siteRootAdmin -p $SITE_ROOT_PWD  \
-       --eval '$ADD_CMDS' ;\
+    mongo \"$ADD_CMDS\" ; \
     \
     /usr/bin/sleep 60; \
     echo restarting now...; \
     systemctl restart %n"
-
 Restart=always
-RestartSec=10s
 
 [X-Fleet]
 MachineOf=mongo@1.service
