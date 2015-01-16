@@ -1,22 +1,31 @@
 [Unit]
 Description=ReplicaSet Configurator
+After=mongo-data@1.service
+Requires=mongo-data@1.service
+
 BindsTo=mongo@1.service
 After=mongo@1.service
+Requires=mongo@1.service
 
 [Service]
 KillMode=none
-TimeoutStartSec=360
+
+# Let processes take awhile to start up
+TimeoutStartSec=0
 TimeoutStopSec=360
+
 EnvironmentFile=/etc/environment
-ExecStartPre=/bin/bash -c "/usr/bin/docker pull mongo:2.6"
+ExecStartPre=/bin/bash -c "/usr/bin/docker pull jaigouk/mongodb-container"
 ExecStart=/bin/bash -c "\
     set -e; \
+    echo ==============================; \
+    echo get replica name and root pwd; \
+    echo ==============================; \
     REPLICA_NAME=$(etcdctl get /mongo/replica/name 2>/dev/null); \
     OTHER_NODES=$(etcdctl ls /mongo/replica/nodes | \
                     xargs -I{} basename {} | \
                     xargs -I{} echo {}:27017 | \
                     grep -v $COREOS_PRIVATE_IPV4); \
-    \
     SITE_ROOT_PWD=$(etcdctl get /mongo/replica/siteRootAdmin/pwd || true); \
     \
     if [ -z \"$SITE_ROOT_PWD\" ]; \
@@ -25,39 +34,44 @@ ExecStart=/bin/bash -c "\
       /usr/bin/sleep 30; \
       exit 1; \
     fi; \
-    \
+    echo ==============================; \
     echo trying to init the replicaset...; \
-    \
-    function mongo() { \
-      docker run -t --rm mongo:2.6 \
-        mongo $COREOS_PRIVATE_IPV4/admin \
+    echo ==============================; \
+    function run_mongo() { \
+      docker run -t --rm --volumes-from mongo-data1 --entrypoint="mongo" \
+         jaigouk/mongodb-container $COREOS_PRIVATE_IPV4/admin \
         -u siteRootAdmin -p $SITE_ROOT_PWD \
         --eval \"$1\"; \
     }; \
-    \
-    mongo \"rs.status().startupStatus === 3 && rs.initiate();\"; \
-    \
+    run_mongo("rs.status().startupStatus === 3 && rs.initiate();" ); \
     \
     /usr/bin/sleep 60; \
+    echo ==============================; \
     echo fix address of first node...; \
-    mongo \"var config = rs.config(); \
+    echo ==============================; \
+    run_mongo("var config = rs.config(); \
             if (config.members.length === 1) { \
               config.members[0].host = '$COREOS_PRIVATE_IPV4'; \
               rs.reconfig(config); \
-            }\"; \
+            }\"); \
     \
+    echo ==============================; \
     echo adding nodes...; \
+    echo ==============================; \
     \
     ADD_CMDS=$(etcdctl ls /mongo/replica/nodes | \
                  grep -v $COREOS_PRIVATE_IPV4 | \
                  xargs -I{} basename {} | \
                  xargs -I{} echo \"rs.add('{}:27017');\"); \
     \
-    mongo \"$ADD_CMDS\" ; \
+    run_mongo($ADD_CMDS) ; \
     \
     /usr/bin/sleep 60; \
+    echo ==============================; \
     echo restarting now...; \
+    echo ==============================; \
     systemctl restart %n"
+
 Restart=on-failure
 
 [X-Fleet]
