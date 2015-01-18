@@ -2,6 +2,7 @@
 Description=Mongo Data Service
 Requires=docker.service
 After=docker.service
+
 [Service]
 TimeoutStartSec=0
 ExecStartPre=-/usr/bin/docker kill mongo-data%i
@@ -9,8 +10,10 @@ ExecStartPre=-/usr/bin/docker rm -v mongo-data%i
 ExecStartPre=-/usr/bin/docker pull lab80/data-only-container
 ExecStart=/usr/bin/docker run --name mongo-data%i lab80/data-only-container
 ExecStop=/usr/bin/docker stop mongo-data%i
+
 [Install]
 WantedBy=multi-user.target
+
 [X-Fleet]
 X-Conflicts=mongo-data@*.service
 Conflicts=mongo-data@*.service

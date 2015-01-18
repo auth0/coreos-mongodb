@@ -20,5 +20,5 @@ docker run -t --rm --volumes-from mongo-data1 \
 
 
 docker run -t --rm --volumes-from mongo-data1 \
---entrypoint="mongo" jaigouk/mongodb-container $COREOS_PRIVATE_IPV4/
+--entrypoint="mongo" jaigouk/mongodb-container $COREOS_PRIVATE_IPV4/admin  -u siteRootAdmin -p $SITE_ROOT_PWD
 

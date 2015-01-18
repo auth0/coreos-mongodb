@@ -34,19 +34,19 @@ ExecStart=/bin/bash -c "\
     \
     echo trying to init the replicaset...; \
     \
-    mongo() { \
-      docker run -t --rm mongo:2.6 \
+    run_mongo() { \
+      /usr/bin/docker run -t --rm mongo:2.6 \
         mongo $COREOS_PRIVATE_IPV4/admin \
         -u siteRootAdmin -p $SITE_ROOT_PWD \
         --eval \"$1\"; \
     }; \
     \
-    mongo \"rs.status().startupStatus === 3 && rs.initiate();\"; \
+    run_mongo \"rs.status().startupStatus === 3 && rs.initiate();\"; \
     \
     \
     /usr/bin/sleep 60; \
     echo fix address of first node...; \
-    mongo \"var config = rs.config(); \
+    run_mongo \"var config = rs.config(); \
             if (config.members.length === 1) { \
               config.members[0].host = '$COREOS_PRIVATE_IPV4'; \
               rs.reconfig(config); \
@@ -59,7 +59,7 @@ ExecStart=/bin/bash -c "\
                  xargs -I{} basename {} | \
                  xargs -I{} echo \"rs.add('{}:27017');\"); \
     \
-    mongo \"$ADD_CMDS\" ; \
+    run_mongo \"$ADD_CMDS\" ; \
     \
     /usr/bin/sleep 60; \
     echo restarting now...; \
