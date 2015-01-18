@@ -18,12 +18,16 @@ fleetctl start mongo-data@{1..3}.service mongo@{1..3}.service mongo-replica-conf
 You can test connecting to your replica from one of your nodes as follows:
 
 ```
-SITE_ROOT_PWD=$(etcdctl get /mongo/replica/siteRootAdmin/pwd)
-REPLICA=$(etcdctl get /mongo/replica/name)
-FIRST_NODE=$(fleetctl list-machines --no-legend | awk '{print $2}' | head -n 1)
-alias mongo="docker run -it --rm mongo:2.6 mongo $REPLICA/$FIRST_NODE/admin -u siteRootAdmin -p $SITE_ROOT_PWD"
+fleetctl-ssh
 
-mongo
+COREOS_PRIVATE_IPV4=xx.xx.xx.xxx; echo $COREOS_PRIVATE_IPV4
+
+SITE_USR_ADMIN_PWD=$(etcdctl get /mongo/replica/siteUserAdmin/pwd); echo $SITE_USR_ADMIN_PWD
+
+SITE_ROOT_PWD=$(etcdctl get /mongo/replica/siteRootAdmin/pwd); echo $SITE_ROOT_PWD
+
+docker run -it --rm mongo:2.6 mongo $COREOS_PRIVATE_IPV4/admin  -u siteRootAdmin -p $SITE_ROOT_PWD
+
 
 $ Welcome to the MongoDB shell.
 ```
@@ -53,7 +57,7 @@ destroy_mongo_replica() {
   etcdctl set /mongo/replica/name myreplica
 
   echo 'Listing etcd /mongo dirs...'
-  ssh -A core@$1 'etcdctl ls /mongo --recursive'
+  ssh -A core@$1 'etcdctl ls /mongo --recursive';
 
   echo Listing $1 /var/mongo
   ssh -A core@$1 'sudo rm -rf /var/mongo/*'
@@ -71,18 +75,18 @@ destroy_mongo_replica() {
 
 To start,
 ```
-$ fleetctl-switch xx.xx.xx.xx
-$ fleetctl start mongo@{1..3}.service mongo-replica-config.service
+fleetctl-switch xx.xx.xx.xx
+fleetctl start mongo@{1..3}.service mongo-replica-config.service
 ```
 
 To see what's going on in a server,
 ```
-$ fleetctl-ssh
+fleetctl-ssh
 ```
 
 To delete all mongodb files,
 ```
-$ clear_mongo_replica <cluser ip 1> <cluser ip 2> <cluser ip 3>
+destroy_mongo_replica <cluser ip 1> <cluser ip 2> <cluser ip 3>
 ```
 
 ## How it works?
