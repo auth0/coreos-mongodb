@@ -4,11 +4,9 @@ Auto-discover new members via etcd.
 ## Deploy
 
 ```
-etcdctl set /mongo/replica/name myreplica
+fleetctl destroy mongo@{1..3}.service  mongo-replica-config.service 
 
-fleetctl destroy mongo@1.service
-fleetctl destroy mongo@{1..3}.service mongo-data@{1..3}.service
-fleetctl destroy mongo-replica-config.service 
+etcdctl set /mongo/replica/name myreplica
 
 fleetctl start mongo-data@{1..3}.service mongo@{1..3}.service mongo-replica-config.service
 ```
