@@ -8,7 +8,7 @@ fleetctl destroy mongo@{1..3}.service  mongo-replica-config.service
 
 etcdctl set /mongo/replica/name myreplica
 
-fleetctl start mongo-data@{1..3}.service mongo@{1..3}.service mongo-replica-config.service
+fleetctl start mongo@{1..3}.service mongo-replica-config.service
 ```
 
 ## Connect
@@ -48,7 +48,7 @@ destroy_mongo_replica() {
   fleetctl destroy mongo@{1..3}.service
   fleetctl destroy mongo@.service
   fleetctl destroy mongo-replica-config.service
-  fleetctl destroy mongo-data@{1..3}.service
+
   etcdctl rm /mongo/replica/siteRootAdmin --recursive
   etcdctl rm /mongo/replica/siteUserAdmin --recursive
   etcdctl rm /mongo/replica --recursive
