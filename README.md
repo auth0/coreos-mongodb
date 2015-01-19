@@ -1,11 +1,13 @@
 Deploy a replicaset to coreos like a boss.
-
 Auto-discover new members via etcd.
 
 ## Deploy
 
 ```
+fleetctl destroy mongo@{1..3}.service  mongo-replica-config.service 
+
 etcdctl set /mongo/replica/name myreplica
+
 fleetctl start mongo@{1..3}.service mongo-replica-config.service
 ```
 
@@ -14,14 +16,75 @@ fleetctl start mongo@{1..3}.service mongo-replica-config.service
 You can test connecting to your replica from one of your nodes as follows:
 
 ```
-SITE_ROOT_PWD=$(etcdctl get /mongo/replica/siteRootAdmin/pwd)
-REPLICA=$(etcdctl get /mongo/replica/name)
-FIRST_NODE=$(fleetctl list-machines --no-legend | awk '{print $2}' | head -n 1)
-alias mongo="docker run -it --rm mongo:2.6 mongo $REPLICA/$FIRST_NODE/admin -u siteRootAdmin -p $SITE_ROOT_PWD"
+fleetctl-ssh
 
-mongo
+COREOS_PRIVATE_IPV4=xx.xx.xx.xxx; echo $COREOS_PRIVATE_IPV4
+
+SITE_USR_ADMIN_PWD=$(etcdctl get /mongo/replica/siteUserAdmin/pwd); echo $SITE_USR_ADMIN_PWD
+
+SITE_ROOT_PWD=$(etcdctl get /mongo/replica/siteRootAdmin/pwd); echo $SITE_ROOT_PWD
+
+docker run -it --rm mongo:2.6 mongo $COREOS_PRIVATE_IPV4/admin  -u siteRootAdmin -p $SITE_ROOT_PWD
+
 
 $ Welcome to the MongoDB shell.
+```
+
+
+### Trouble shooting
+
+In my shell rc file (~/.zsh_aliases)
+```
+fleetctl-switch(){
+  ssh-add ~/.docker/certs/key.pem
+  DOCKER_HOST=tcp://$1:2376
+  export FLEETCTL_TUNNEL=$1:22
+  alias etcdctl="ssh -A core@$1 'etcdctl'"
+  alias fleetctl-ssh="fleetctl ssh $(fleetctl list-machines | cut -c1-8 | sed -n 2p)"
+  RPROMPT="%{$fg[magenta]%}[fleetctl:$1]%{$reset_color%}"
+}
+destroy_mongo_replica() {
+  export FLEETCTL_TUNNEL=$1:22
+  fleetctl destroy mongo@{1..3}.service
+  fleetctl destroy mongo@.service
+  fleetctl destroy mongo-replica-config.service
+
+  etcdctl rm /mongo/replica/siteRootAdmin --recursive
+  etcdctl rm /mongo/replica/siteUserAdmin --recursive
+  etcdctl rm /mongo/replica --recursive
+  etcdctl set /mongo/replica/name myreplica
+
+  echo 'Listing etcd /mongo dirs...'
+  ssh -A core@$1 'etcdctl ls /mongo --recursive';
+
+  echo Listing $1 /var/mongo
+  ssh -A core@$1 'sudo rm -rf /var/mongo/*'
+  ssh -A core@$1 'ls /var/mongo/'
+
+  echo Listing $2 /var/mongo
+  ssh -A core@$2 'sudo rm -rf /var/mongo/*'
+  ssh -A core@$2 'ls /var/mongo/'
+
+  echo Listing $3 /var/mongo
+  ssh -A core@$3 'sudo rm -rf /var/mongo/*'
+  ssh -A core@$3 'ls /var/mongo/'
+}
+```
+
+To start,
+```
+fleetctl-switch xx.xx.xx.xx
+fleetctl start mongo@{1..3}.service mongo-replica-config.service
+```
+
+To see what's going on in a server,
+```
+fleetctl-ssh
+```
+
+To delete all mongodb files,
+```
+destroy_mongo_replica <cluser ip 1> <cluser ip 2> <cluser ip 3>
 ```
 
 ## How it works?

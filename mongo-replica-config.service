@@ -16,48 +16,47 @@ ExecStart=/bin/bash -c "\
                     xargs -I{} echo {}:27017 | \
                     grep -v $COREOS_PRIVATE_IPV4); \
     \
-    SITE_ROOT_PWD=$(etcdctl get /mongo/replica/siteRootAdmin/pwd || true); \
-    \
+    SITE_ROOT_PWD=$(/usr/bin/etcdctl get /mongo/replica/siteRootAdmin/pwd 2>/dev/null || true ); \
     if [ -z \"$SITE_ROOT_PWD\" ]; \
     then \
-      echo siteRootAdmin is not yet configured...; \
-      /usr/bin/sleep 30; \
-      exit 1; \
-    fi; \
-    \
-    echo trying to init the replicaset...; \
-    \
-    function mongo() { \
-      docker run -it --rm mongo:2.6 \
-        mongo $COREOS_PRIVATE_IPV4/admin \
-        -u siteRootAdmin -p $SITE_ROOT_PWD \
-        --eval \"$1\"; \
-    }; \
-    \
-    mongo \"rs.status().startupStatus === 3 && rs.initiate();\"; \
-    \
-    \
-    /usr/bin/sleep 60; \
-    echo fix address of first node...; \
-    mongo \"var config = rs.config(); \
-            if (config.members.length === 1) { \
-              config.members[0].host = '$COREOS_PRIVATE_IPV4'; \
-              rs.reconfig(config); \
-            }\"; \
-    \
-    echo adding nodes...; \
-    \
-    ADD_CMDS=$(etcdctl ls /mongo/replica/nodes | \
-                 grep -v $COREOS_PRIVATE_IPV4 | \
-                 xargs -I{} basename {} | \
-                 xargs -I{} echo \"rs.add('{}:27017');\"); \
-    \
-    mongo \"$ADD_CMDS\" ; \
-    \
-    /usr/bin/sleep 60; \
-    echo restarting now...; \
-    systemctl restart %n"
+        echo siteRootAdmin is not yet configured...; \
+        /usr/bin/sleep 20; \
+        /usr/bin/systemctl restart %n; \
+    else \
+        echo Will configure replica set from now; \
+        echo trying to init the replicaset...; \
+        \
+        /usr/bin/docker run -t --rm mongo:2.6 \
+            mongo $COREOS_PRIVATE_IPV4/admin \
+            -u siteRootAdmin -p $SITE_ROOT_PWD \
+            --eval \"rs.status().startupStatus === 3 && rs.initiate();\"; \
+        \
+        /usr/bin/sleep 60; \
+        echo fix address of first node...; \
+        /usr/bin/docker run -t --rm mongo:2.6 \
+            mongo $COREOS_PRIVATE_IPV4/admin \
+            -u siteRootAdmin -p $SITE_ROOT_PWD \
+            --eval \"var config = rs.config(); \
+                if (config.members.length === 1) { \
+                  config.members[0].host = '$COREOS_PRIVATE_IPV4'; \
+                  rs.reconfig(config); \
+                }\"; \
+        \
+        echo adding nodes...; \
+        \
+        ADD_CMDS=$(etcdctl ls /mongo/replica/nodes | \
+                     grep -v $COREOS_PRIVATE_IPV4 | \
+                     xargs -I{} basename {} | \
+                     xargs -I{} echo \"rs.add('{}:27017');\"); \
+        \
+        /usr/bin/docker run -t --rm mongo:2.6 \
+            mongo $COREOS_PRIVATE_IPV4/admin \
+            -u siteRootAdmin -p $SITE_ROOT_PWD \
+            --eval \"$ADD_CMDS\" ; \
+        \
+        echo Replica is configured ;\
+        exit 0; \
+    fi;"
 Restart=on-failure
-
 [X-Fleet]
 MachineOf=mongo@1.service

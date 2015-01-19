@@ -7,7 +7,7 @@ Requires=etcd.service
 
 [Service]
 KillMode=none
-TimeoutStartSec=360
+TimeoutStartSec=0
 TimeoutStopSec=360
 EnvironmentFile=/etc/environment
 Environment=INSTANCE=%i
@@ -44,41 +44,45 @@ ExecStartPost=/bin/bash -c "\
           set -e; \
           /usr/bin/etcdctl set /mongo/replica/nodes/$COREOS_PRIVATE_IPV4/port 27017; \
           /usr/bin/etcdctl set /mongo/replica/nodes/$COREOS_PRIVATE_IPV4/status on; \
-          REPLICA_KEY=$(etcdctl get /mongo/replica/key 2>/dev/null || true); \
+          REPLICA_KEY=$(/usr/bin/etcdctl get /mongo/replica/key 2>/dev/null || true); \
+          \
           if [ -n \"$REPLICA_KEY\" ]; then exit 0; fi; \
           if [ \"$INSTANCE\" -ne \"1\" ]; then exit 0; fi; \
           /usr/bin/sleep 60; \
           \
           echo Configuring credentials ; \
-          SITE_USR_ADMIN_PWD=$(etcdctl get /mongo/replica/siteUserAdmin/pwd || \
-                               etcdctl set /mongo/replica/siteUserAdmin/pwd \
+          /usr/bin/etcdctl set /mongo/replica/key $(openssl rand -base64 741); \
+          \
+          SITE_USR_ADMIN_PWD=$(/usr/bin/etcdctl get /mongo/replica/siteUserAdmin/pwd || \
+                               /usr/bin/etcdctl set /mongo/replica/siteUserAdmin/pwd \
                                           $(openssl rand -base64 32)); \
           \
-          SITE_ROOT_PWD=$(etcdctl get /mongo/replica/siteRootAdmin/pwd || \
-                          etcdctl set /mongo/replica/siteRootAdmin/pwd \
+          SITE_ROOT_PWD=$(/usr/bin/etcdctl get /mongo/replica/siteRootAdmin/pwd || \
+                          /usr/bin/etcdctl set /mongo/replica/siteRootAdmin/pwd \
                                       $(openssl rand -base64 32)); \
           \
           echo Creating the siteUserAdmin user... ; \
-          docker run \
-            -it --rm \
+          /usr/bin/docker run \
+            -t --rm \
             mongo:2.6 \
             mongo $COREOS_PRIVATE_IPV4/admin \
             --eval \"db.createUser({user:'siteUserAdmin', \
                                     pwd:'$SITE_USR_ADMIN_PWD', \
-                                    roles: [{role:'userAdminAnyDatabase', db:'admin'}]});\"; \
+                                    roles: [{role:'userAdminAnyDatabase', db:'admin'}, 'readWrite']});\"; \
           \
           echo Creating the siteRootAdmin user... ; \
-          docker run \
-            -it --rm \
+          /usr/bin/docker run \
+            -t --rm \
             mongo:2.6 \
             mongo $COREOS_PRIVATE_IPV4/admin \
             --eval \"db.createUser({user:'siteRootAdmin', \
                                     pwd:'$SITE_ROOT_PWD', \
-                                    roles: [{role:'root', db:'admin'}]});\"; \
+                                    roles: [{role:'root', db:'admin'}, 'readWrite']});\"; \
           \
-          etcdctl set /mongo/replica/key \"$(openssl rand -base64 741)\"; \
+          \
           echo restarting now... ; \
           exit 1"
+
 ExecStop=/bin/bash -c -v "\
           /usr/bin/docker stop -t 60 mongodb || true; \
           /usr/bin/etcdctl set /mongo/replica/nodes/$COREOS_PRIVATE_IPV4/status off"
